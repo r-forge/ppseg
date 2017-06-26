@@ -133,6 +133,14 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
   TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
   n <- length(donnees[,1])          # n est le nombre d individus 
   
+  # --- Pour prior de lambda ---
+  moyenne <- mean(donnees)
+  variance <- sd(donnees)**2
+  h <- moyenne**2 / variance
+  k <- moyenne / variance
+  # -------- 
+  
+  
   hbetaVec <- as.numeric(hbeta[-1,]) 
   
   stock <- rep(0,S)
@@ -169,7 +177,7 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
       m1 <- 0
       for(i in 1:n){
         for(j in 1:g){
-          dp[j] <- dpois(donnees[i,k],c[j], log=TRUE)
+          dp[j] <- dpois(donnees[i,k],c[j]/TT, log=TRUE)
         }
         m1 <- max(e+dp)
         
@@ -189,7 +197,7 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
       a2 <- a2 + dnorm(b[jj],0,10^2,log=TRUE)
     }
     for(jj in 1:length(hlambda)){
-      a2 <- a2 + dnorm(c[jj],0,10^2,log=TRUE)
+      a2 <- a2 + dgamma(c[jj],h,scale=k,log=TRUE)
     }
     
     lvb <- a1 + a2
@@ -203,9 +211,9 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
   for(u in 1:S){
     somme <- somme + exp(stock[u]-R)
   }
-  R <- R + log(somme) - log(S)
-  # log ( estimation de notre vraisemblance complété du modèle )
-  return(R)
+  ret <- R + log(somme) - log(S)
+  # log ( estimation de notre vraisemblance du modèle )
+  return(ret)
 }  
 
   
