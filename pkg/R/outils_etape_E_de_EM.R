@@ -11,6 +11,8 @@
 #                                                   #
 matrice_H <- function(donnees,lambda,poids){
   TT <- length(donnees[1,])
+  n <- length(donnees[,1]) 
+  g <- length(lambda)
   H <- array(0,c(n,TT,g))
   
   for (i in 1:nrow(donnees)){

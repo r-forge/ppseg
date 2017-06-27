@@ -9,7 +9,7 @@ MAP <- function(donnees,g,lambda,beta){
   TT <- length(donnees[1,])
   n <- length(donnees[,1])
   
-  poids <- ensemble_poids(beta,TT,g)
+  poids <- ensemble_poids(beta,TT)
   h <- matrice_H(donnees,lambda,poids)
   # Reinitialisation de notre partition z 
   z <- array(0,c(n,TT,g))
@@ -74,7 +74,7 @@ estimation_LVC_modele_poids <- function(S=100,hbeta,z,n=1,TT,g){
   return(R)
 }
 
-estimation_LVC_modele_composante <- function(donnees,z,n,TT){
+estimation_LVC_modele_composante <- function(donnees,z,n,TT,g){
   moyenne <- mean(donnees)
   variance <- sd(donnees)**2
   a <- moyenne**2 / variance
