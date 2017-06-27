@@ -4,7 +4,7 @@ selection_EM <- function(donnees,g,nb_tests=4){
   # ------------------------------------------------- #
   #         premiere utilisation de EM                #
   res_EM <- mclapply(1:nb_tests, function(i) EM(donnees,g), mc.silent=TRUE, mc.cores=2)
-  print(res_EM)
+  # print(res_EM)
   res_EM <- res_EM[[which.max(sapply(1:nb_tests, function(i) res_EM[[i]]$log_vraisemblance))]]
   #   res_EM_selection <- EM(donnees,g)
   #   # ------------------------------------------------- #

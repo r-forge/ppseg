@@ -21,6 +21,10 @@ MAP <- function(donnees,g,lambda,beta){
   return(z)
 }
 
+# **************************************************************************** # 
+#                         p( x , z | m )
+# **************************************************************************** # 
+
 estimation_LVC_modele_poids <- function(S=100,hbeta,z,n=1,TT,g){
   hbetaVec <- as.numeric(hbeta[-1,]) 
   w_2 <- rowSums(sapply(1:(dim(z)[1]), function(i) as.numeric(t(z[i,,]))))
@@ -110,6 +114,14 @@ estimation_LVC_modele_composante <- function(donnees,z,n,TT,g){
   return(res)
 }
 
+# --- Simplification d'utilisation
+log_critere_ICL <- function(S=100,hbeta,donnees,z,n,TT,g){
+  return( estimation_LVC_modele_poids(S,hbeta,z,n,TT,g) + estimation_LVC_modele_composante(donnees,z,n,TT,g) )
+}
+# **************************************************************************** # 
+#                         quand g = 1
+# **************************************************************************** # 
+
 log_critere_g1 <- function(donnees){
   TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
   n <- length(donnees[,1])          # n est le nombre d individus 
@@ -128,6 +140,9 @@ log_critere_g1 <- function(donnees){
   return(- c*log(TT) + c2 + a*log(b) - (c+a)*log(n+b) + lgamma(c+a) - lgamma(a))
 }
   
+# **************************************************************************** # 
+#                         p( x | m )
+# **************************************************************************** # 
 
 log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
   TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
@@ -215,6 +230,120 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
   # log ( estimation de notre vraisemblance du modèle )
   return(ret)
 }  
+
+# **************************************************************************** # 
+
+selection_criteria <- function(test_group , donnees , method="both"){
+  TT <- length(donnees[1,])      
+  n <- length(donnees[,1])  
+  # -----
+  S = 100
+  # -----
+  
+  if((method!="BIC")&&(method!="ICL")&&(method!="both")){
+    stop("Error : The method is not recognized")
+  }
+  # ********************************************************* #
+  if(method == "ICL"){
+    best_group <- 0
+    best_likelihood <- -Inf
+    
+    for(testing in test_group){
+      if(test_group[testing]==1){
+        criteria <- log_critere_g1(donnees)
+        if(criteria > best_likelihood){
+          best_likelihood <- criteria
+          best_group <- test_group[testing]
+        }
+      }else{
+        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
+        z <- MAP( donnees=donnees , g=test_group[testing] , lambda=estim$lambda , beta=estim$beta )
+        criteria <- log_critere_ICL(S = S, hbeta=estim$beta , donnees=donnees , z=z , n=n , TT=TT , g=test_group[testing])
+        if(criteria > best_likelihood){
+          best_likelihood <- criteria
+          best_group <- test_group[testing]
+        }
+      }
+    }
+    return(list( group_select = best_group , log_likelihood_completed_select = best_likelihood ))
+  }
+  # ********************************************************* #
+  if(method == "BIC"){
+    best_group <- 0
+    best_likelihood <- -Inf
+    
+    for(testing in test_group){
+      if(test_group[testing]==1){
+        criteria <- log_critere_g1(donnees)
+        if(criteria > best_likelihood){
+          best_likelihood <- criteria
+          best_group <- test_group[testing]
+        }
+      }else{
+        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
+        criteria <- log_critere_BIC(S = S , donnees = donnees , hbeta = estim$beta , hlambda = estim$lambda , g=test_group[testing])
+        if(criteria > best_likelihood){
+          best_likelihood <- criteria
+          best_group <- test_group[testing]
+        }
+      }
+    }
+    return(list( group_select = best_group , log_likelihood_select = best_likelihood ))
+  }
+  # ********************************************************* #
+  if(method == "both"){
+    # --- BIC part ---
+    best_group_BIC <- 0
+    best_likelihood_BIC <- -Inf
+    
+    for(testing in test_group){
+      if(test_group[testing]==1){
+        criteria <- log_critere_g1(donnees)
+        if(criteria > best_likelihood_BIC){
+          best_likelihood_BIC <- criteria
+          best_group_BIC <- test_group[testing]
+        }
+      }else{
+        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
+        criteria <- log_critere_BIC(S = S , donnees = donnees , hbeta = estim$beta , hlambda = estim$lambda , g=test_group[testing])
+        if(criteria > best_likelihood_BIC){
+          best_likelihood_BIC <- criteria
+          best_group_BIC <- test_group[testing]
+        }
+      }
+    }
+    # ----------------
+    # --- ICL part ---
+    best_group_ICL <- 0
+    best_likelihood_ICL <- -Inf
+    
+    for(testing in test_group){
+      if(test_group[testing]==1){
+        criteria <- log_critere_g1(donnees)
+        if(criteria > best_likelihood_ICL){
+          best_likelihood_ICL <- criteria
+          best_group_ICL <- test_group[testing]
+        }
+      }else{
+        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
+        z <- MAP( donnees=donnees , g=test_group[testing] , lambda=estim$lambda , beta=estim$beta )
+        criteria <- log_critere_ICL(S = S , hbeta=estim$beta , donnees=donnees , z=z , n=n , TT=TT , g=test_group[testing])
+        if(criteria > best_likelihood_ICL){
+          best_likelihood_ICL <- criteria
+          best_group_ICL <- test_group[testing]
+        }
+      }
+    }
+    # ----------------
+    return(list(BIC_select = list( group_select = best_group_BIC , log_likelihood_select = best_likelihood_BIC ),
+                ICL_select = list( group_select = best_group_ICL , log_likelihood_completed_select = best_likelihood_ICL )
+                ))
+  }
+}
+
+# **************************************************************************** # 
+
+
 
   
 # **************************** # 
