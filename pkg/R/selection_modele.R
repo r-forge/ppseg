@@ -5,25 +5,203 @@
 #                                                                                        #
 # ************************************************************************************** #
 
-MAP <- function(donnees,g,lambda,beta){
-  TT <- length(donnees[1,])
-  n <- length(donnees[,1])
-  
-  poids <- ensemble_poids(beta,TT)
-  h <- matrice_H(donnees,lambda,poids)
-  # Reinitialisation de notre partition z 
-  z <- array(0,c(n,TT,g))
-  for (i in 1:n){
-    for(k in 1:TT){
-      z[i,k,which.max(h[i,k,])] = 1
-    }
-  }
-  return(z)
+
+# ************************************************************************************** # 
+# ************************************************************************************** # 
+#                         FONCTIONS SUPPLEMENTAIRES DU  28/06                            #
+# ************************************************************************************** # 
+# ************************************************************************************** # 
+
+# Fixe hyper parameters
+hyperparameters <- function(donnees,n){
+  moyenne <- mean(donnees)
+  variance <- sd(donnees)**2
+  return(list(logistic = list(mu = 0 , sigma = 10^2),
+              poisson = list(a = moyenne**2 / variance , b = moyenne/variance)
+              ))
 }
+
+# Calcul densite priors pour parameter poisson p(lambda|m)
+dpoissonprior <- function(vec,a,b,log=TRUE){
+  ret <- sum(dgamma(vec,a,scale=b,log=TRUE))
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
+# Calcul densite priors pour parameter logistic p(beta|m)
+dlogisticprior <- function(vec,mu,sigma,log=TRUE){
+  ret <- sum(dnorm(vec,mu,sigma,log=TRUE))
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
+# rImportancepx
+rImportancepx <- function(hbetaVec,hlambda,n){
+  return(list(beta = rnorm(length(hbetaVec),hbetaVec,(10/sqrt(n))),
+              lambda = rtnorm(length(hlambda),hlambda,(10/sqrt(n)),lower=0,upper=Inf) ))
+}
+
+
+# dImportancepx
+dImportancepx <- function(betaVec,lambda,hbetaVec,hlambda,n,log=TRUE){
+  ret <- sum(dnorm(betaVec,hbetaVec,(10/sqrt(n)),log=TRUE)) + sum(dtnorm(lambda,hlambda,(10/sqrt(n)),log=TRUE,lower=0,upper=Inf))
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
+# rImportancepxz
+rImportancepxz <- function(hbetaVec,n){
+  return( list( beta = rnorm(length(hbetaVec),hbetaVec,(10/sqrt(n))) ) )
+}
+
+# dImportancepxz
+dImportancepxz <- function(betaVec,hbetaVec,n,log=TRUE){
+  ret <- sum(dnorm(betaVec,hbetaVec,(10/sqrt(n)),log=TRUE)) 
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
+# Calcul de p(x,theta|m)
+partOnepx <- function(donnees,betaVec,lambda,hyparameters,n,TT,g,log=TRUE){
+  ret <- likelihood(donnees,betaVec,lambda,n,TT,g,log=TRUE) + dlogisticprior(betaVec,hyparameters$logistic$mu,hyparameters$logistic$sigma,log=TRUE) + dpoissonprior(lambda,hyparameters$poisson$a,hyparameters$poisson$b,log=TRUE) 
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+
+
+# Calcul de p(x,z,theta|m)
+partOnepxz <- function(donnees,betaVec,zMAP,hyparameters,n,TT,g,log=TRUE){
+  # partie sur les poids 
+  ret <- likelihoodcompleted_weight(donnees,betaVec,zMAP,n,TT,g,log=TRUE) + dlogisticprior(betaVec,hyparameters$logistic$mu,hyparameters$logistic$sigma,log=TRUE) 
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+
+# OneIterImportancepx
+OneIterImportancepx <- function(donnees,betaVec,lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE){
+  ret <- partOnepx(donnees,betaVec,lambda,hyparameters,n,TT,g,log=TRUE) - dImportancepx(betaVec,lambda,hbetaVec,hlambda,n,log=TRUE)
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+
+# OneIterImportancepxz
+OneIterImportancepxz <- function(donnees,betaVec,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE){
+  ret <- partOnepxz(donnees,betaVec,zMAP,hyparameters,n,TT,g,log=TRUE) - dImportancepxz(betaVec,hbetaVec,n,log=TRUE)
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+# --------------------------------------------------------- #
+#                     p(x|m)                                #
+# --------------------------------------------------------- #
+Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s <- rImportancepx(hbetaVec,hlambda,n)
+    OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
+  })
+  return(logsum(stock) - log(S))
+}
+# --------------------------------------------------------- #
+#                     p(x,z|m)                              #
+# --------------------------------------------------------- #
+Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
+  # partie sur les poids 
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s <- rImportancepxz(hbetaVec,n)
+    OneIterImportancepxz(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
+  })
+  p1 <- logsum(stock) - log(S)
+  # partie sur les composantes
+  # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
+  
+  a <- hyparameters$poisson$a
+  b <- hyparameters$poisson$b
+  p2 <- sum(sapply(1:g, function(j){
+    s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
+    s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
+    s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
+    a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
+  }))
+  
+  return(p1 + p2)
+}
+
+
+# p(x,htheta|m) = p(x|m,htheta)p(htheta|m)
+
+
+# ************************************************************************************** #        
+# ************************************************************************************** # 
+#                        ANCIENNES FONCTIONS                                             #
+# ************************************************************************************** # 
+# ************************************************************************************** # 
+
+
+
+
+
+
+
+
+
+
+
 
 # **************************************************************************** # 
 #                         p( x , z | m )
 # **************************************************************************** # 
+Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+                                  s <- rImportancepx(hbetaVec,hlambda,n)
+                                  OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
+  })
+  return(logsum(stock) - log(S))
+}
+
+Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
+  # partie sur les poids 
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+                                  s <- rImportancepxz(hbetaVec,n)
+                                  OneIterImportancepxz(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
+                                  })
+  p1 <- logsum(stock) - log(S)
+  # partie sur les composantes
+  # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
+  
+  a <- hyparameters$poisson$a
+  b <- hyparameters$poisson$b
+  p2 <- sum(sapply(1:g, function(j){
+    s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
+    s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
+    s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
+    a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
+  }))
+  
+  return(p1 + p2)
+}
 
 estimation_LVC_modele_poids <- function(S=100,hbeta,z,n=1,TT,g){
   hbetaVec <- as.numeric(hbeta[-1,]) 
@@ -68,12 +246,7 @@ estimation_LVC_modele_poids <- function(S=100,hbeta,z,n=1,TT,g){
     stock[u] <- lvb - db
   }
   # Astuce
-  R <- max(stock) 
-  somme <- 0
-  for(u in 1:S){
-    somme <- somme + exp(stock[u]-R)
-  }
-  R <- R + log(somme) - log(S)
+  R <- logsum(stock) - log(S)
   # log ( estimation de notre vraisemblance complété du modèle )
   return(R)
 }
@@ -145,14 +318,14 @@ log_critere_g1 <- function(donnees){
 # **************************************************************************** # 
 
 log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
-  TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
+  TT <- length(donnees[1,])          # T est le  d intervalles dans [0;1] 
   n <- length(donnees[,1])          # n est le nombre d individus 
   
   # --- Pour prior de lambda ---
   moyenne <- mean(donnees)
   variance <- sd(donnees)**2
   h <- moyenne**2 / variance
-  k <- moyenne / variance
+  l <- moyenne / variance
   # -------- 
   
   
@@ -165,15 +338,15 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
     c <- rtnorm(length(hlambda),hlambda,(10/sqrt(n)),lower=0,upper=Inf) 
     
     # --- log( I(\theta_s) ) ---
-    db <- 0
-    for(jj in 1:length(hbetaVec)){
-      db <- db + dnorm(b[jj],hbetaVec[jj],(10/sqrt(n)),log=TRUE)
-    }
-    dc <- 0
-    for(jj in 1:length(hlambda)){
-      dc <- dc + dtnorm(c[jj],hlambda[jj],(10/sqrt(n)),log=TRUE,lower=0,upper=Inf)
-    }
-    d_I <- db + dc
+#     db <- sum(dnorm(b,hbetaVec,(10/sqrt(n)),log=TRUE))
+#     for(jj in 1:length(hbetaVec)){
+#       db <- db + dnorm(b[jj],hbetaVec[jj],(10/sqrt(n)),log=TRUE)
+#     }
+#     dc <- 0
+#     for(jj in 1:length(hlambda)){
+#       dc <- dc + dtnorm(c[jj],hlambda[jj],(10/sqrt(n)),log=TRUE,lower=0,upper=Inf)
+#     }
+    d_I <- sum(dnorm(b,hbetaVec,(10/sqrt(n)),log=TRUE)) + sum(dtnorm(c,hlambda,(10/sqrt(n)),log=TRUE,lower=0,upper=Inf))
     
     # -------------------
     # LV de \theta_s
@@ -212,7 +385,7 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
       a2 <- a2 + dnorm(b[jj],0,10^2,log=TRUE)
     }
     for(jj in 1:length(hlambda)){
-      a2 <- a2 + dgamma(c[jj],h,scale=k,log=TRUE)
+      a2 <- a2 + dgamma(c[jj],h,scale=l,log=TRUE)
     }
     
     lvb <- a1 + a2
@@ -231,121 +404,14 @@ log_critere_BIC <- function(S=100,donnees,hbeta,hlambda,g){
   return(ret)
 }  
 
-# **************************************************************************** # 
 
-selection_criteria <- function(test_group , donnees , method="both"){
-  TT <- length(donnees[1,])      
-  n <- length(donnees[,1])  
-  # -----
-  S = 100
-  # -----
-  
-  if((method!="BIC")&&(method!="ICL")&&(method!="both")){
-    stop("Error : The method is not recognized")
-  }
-  # ********************************************************* #
-  if(method == "ICL"){
-    best_group <- 0
-    best_likelihood <- -Inf
-    
-    for(testing in test_group){
-      if(test_group[testing]==1){
-        criteria <- log_critere_g1(donnees)
-        if(criteria > best_likelihood){
-          best_likelihood <- criteria
-          best_group <- test_group[testing]
-        }
-      }else{
-        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
-        z <- MAP( donnees=donnees , g=test_group[testing] , lambda=estim$lambda , beta=estim$beta )
-        criteria <- log_critere_ICL(S = S, hbeta=estim$beta , donnees=donnees , z=z , n=n , TT=TT , g=test_group[testing])
-        if(criteria > best_likelihood){
-          best_likelihood <- criteria
-          best_group <- test_group[testing]
-        }
-      }
-    }
-    return(list( group_select = best_group , log_likelihood_completed_select = best_likelihood ))
-  }
-  # ********************************************************* #
-  if(method == "BIC"){
-    best_group <- 0
-    best_likelihood <- -Inf
-    
-    for(testing in test_group){
-      if(test_group[testing]==1){
-        criteria <- log_critere_g1(donnees)
-        if(criteria > best_likelihood){
-          best_likelihood <- criteria
-          best_group <- test_group[testing]
-        }
-      }else{
-        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
-        criteria <- log_critere_BIC(S = S , donnees = donnees , hbeta = estim$beta , hlambda = estim$lambda , g=test_group[testing])
-        if(criteria > best_likelihood){
-          best_likelihood <- criteria
-          best_group <- test_group[testing]
-        }
-      }
-    }
-    return(list( group_select = best_group , log_likelihood_select = best_likelihood ))
-  }
-  # ********************************************************* #
-  if(method == "both"){
-    # --- BIC part ---
-    best_group_BIC <- 0
-    best_likelihood_BIC <- -Inf
-    
-    for(testing in test_group){
-      if(test_group[testing]==1){
-        criteria <- log_critere_g1(donnees)
-        if(criteria > best_likelihood_BIC){
-          best_likelihood_BIC <- criteria
-          best_group_BIC <- test_group[testing]
-        }
-      }else{
-        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
-        criteria <- log_critere_BIC(S = S , donnees = donnees , hbeta = estim$beta , hlambda = estim$lambda , g=test_group[testing])
-        if(criteria > best_likelihood_BIC){
-          best_likelihood_BIC <- criteria
-          best_group_BIC <- test_group[testing]
-        }
-      }
-    }
-    # ----------------
-    # --- ICL part ---
-    best_group_ICL <- 0
-    best_likelihood_ICL <- -Inf
-    
-    for(testing in test_group){
-      if(test_group[testing]==1){
-        criteria <- log_critere_g1(donnees)
-        if(criteria > best_likelihood_ICL){
-          best_likelihood_ICL <- criteria
-          best_group_ICL <- test_group[testing]
-        }
-      }else{
-        estim <- selection_EM(donnees=donnees,g=test_group[testing],nb_tests=4) # utilisation de plusieurs coeurs
-        z <- MAP( donnees=donnees , g=test_group[testing] , lambda=estim$lambda , beta=estim$beta )
-        criteria <- log_critere_ICL(S = S , hbeta=estim$beta , donnees=donnees , z=z , n=n , TT=TT , g=test_group[testing])
-        if(criteria > best_likelihood_ICL){
-          best_likelihood_ICL <- criteria
-          best_group_ICL <- test_group[testing]
-        }
-      }
-    }
-    # ----------------
-    return(list(BIC_select = list( group_select = best_group_BIC , log_likelihood_select = best_likelihood_BIC ),
-                ICL_select = list( group_select = best_group_ICL , log_likelihood_completed_select = best_likelihood_ICL )
-                ))
-  }
-}
+
 
 # **************************************************************************** # 
 
 
 
-  
+  # bouge
 # **************************** # 
 #    Hessienne                 #
 
