@@ -12,7 +12,13 @@
 # ************************************************************************************** # 
 # ************************************************************************************** # 
 
+# ==================================================== #
+# A FAIRE FOCNTION
 # Fixe hyper parameters
+
+# p(x,htheta|m) = p(x|m,htheta)p(htheta|m)
+# ==================================================== #
+
 hyperparameters <- function(donnees,n){
   moyenne <- mean(donnees)
   variance <- sd(donnees)**2
@@ -69,6 +75,31 @@ dImportancepxz <- function(betaVec,hbetaVec,n,log=TRUE){
   return(ret)
 }
 
+# rImportancepz 
+rImportancepz <- function(hpoids,n,TT,g){
+  sim_z <- array(0,c(n,TT,g))
+  for(i in 1:n){
+    for(k in 1:TT){
+      sim_z[i,k,sample(g,1,prob=hpoids[k,])] <- 1
+    }
+  }
+  return(sim_z)
+}
+
+# dImportancepz
+dImportancepz <- function(z,hpoids,n,TT,g,log=TRUE){
+  ret <- 0
+  for(i in 1:n){
+    for(k in 1:TT){
+      ret <- ret + log(hpoids[k,which(z[i,k,]==1)])  
+    }
+  }
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
 # Calcul de p(x,theta|m)
 partOnepx <- function(donnees,betaVec,lambda,hyparameters,n,TT,g,log=TRUE){
   ret <- likelihood(donnees,betaVec,lambda,n,TT,g,log=TRUE) + dlogisticprior(betaVec,hyparameters$logistic$mu,hyparameters$logistic$sigma,log=TRUE) + dpoissonprior(lambda,hyparameters$poisson$a,hyparameters$poisson$b,log=TRUE) 
@@ -106,21 +137,12 @@ OneIterImportancepxz <- function(donnees,betaVec,hbetaVec,zMAP,hyparameters,n,TT
   }
   return(ret) 
 }
-# --------------------------------------------------------- #
-#                     p(x|m)                                #
-# --------------------------------------------------------- #
-Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
-  hbetaVec <- as.numeric(hbeta[-1,])
-  hyparameters <- hyperparameters(donnees,n)
-  stock <- sapply(1:S, function(u){
-    s <- rImportancepx(hbetaVec,hlambda,n)
-    OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
-  })
-  return(logsum(stock) - log(S))
-}
+
 # --------------------------------------------------------- #
 #                     p(x,z|m)                              #
 # --------------------------------------------------------- #
+
+# Methode 1 : IS + partie exacte poisson
 Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
   # partie sur les poids 
   hbetaVec <- as.numeric(hbeta[-1,])
@@ -145,8 +167,72 @@ Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
   return(p1 + p2)
 }
 
+# Methode 2 : BIClogistic + partie exacte poisson
+Integratedlikelihoodcompleted_BIC <- function(donnees,hbeta,zMAP,n,TT,g){
+  # partie sur les poids 
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
 
-# p(x,htheta|m) = p(x|m,htheta)p(htheta|m)
+  p1 <- likelihoodcompleted_weight(donnees,hbetaVec,zMAP,n,TT,g,log=TRUE) - (g-1)*log(n*TT)
+  # partie sur les composantes
+  # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
+  
+  a <- hyparameters$poisson$a
+  b <- hyparameters$poisson$b
+  p2 <- sum(sapply(1:g, function(j){
+    s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
+    s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
+    s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
+    a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
+  }))
+  
+  return(p1 + p2)
+}
+
+
+# --------------------------------------------------------- #
+#                     p(x|m)                                #
+# --------------------------------------------------------- #
+
+# Methode 1 : IS
+Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s <- rImportancepx(hbetaVec,hlambda,n)
+    OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
+  })
+  return(logsum(stock) - log(S))
+}
+
+# Methode 2 : BIC
+BIC <- function(donnees,hbeta,hlambda,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  return(likelihood(donnees,hbetaVec,hlambda,n,TT,g,log=TRUE) - ((g-1)*2+g)*log(n*TT)/2) 
+}
+
+# Methode 3 : IS sur z avec methode 1 de p(x,z|m)
+Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s_z <- rImportancepz(hpoids,n,TT,g)
+    Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hpoids,n,TT,g,log=TRUE)
+  })
+  return(logsum(stock) - log(S))
+}
+
+# Methode 3 : IS sur z avec methode 2 de p(x,z|m)
+Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s_z <- rImportancepz(hpoids,n,TT,g)
+    Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hpoids,n,TT,g,log=TRUE)
+  })
+  return(logsum(stock) - log(S))
+}
+
 
 
 # ************************************************************************************** #        
@@ -169,39 +255,39 @@ Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
 # **************************************************************************** # 
 #                         p( x , z | m )
 # **************************************************************************** # 
-Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
-  hbetaVec <- as.numeric(hbeta[-1,])
-  hyparameters <- hyperparameters(donnees,n)
-  stock <- sapply(1:S, function(u){
-                                  s <- rImportancepx(hbetaVec,hlambda,n)
-                                  OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
-  })
-  return(logsum(stock) - log(S))
-}
-
-Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
-  # partie sur les poids 
-  hbetaVec <- as.numeric(hbeta[-1,])
-  hyparameters <- hyperparameters(donnees,n)
-  stock <- sapply(1:S, function(u){
-                                  s <- rImportancepxz(hbetaVec,n)
-                                  OneIterImportancepxz(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
-                                  })
-  p1 <- logsum(stock) - log(S)
-  # partie sur les composantes
-  # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
-  
-  a <- hyparameters$poisson$a
-  b <- hyparameters$poisson$b
-  p2 <- sum(sapply(1:g, function(j){
-    s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
-    s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
-    s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
-    a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
-  }))
-  
-  return(p1 + p2)
-}
+# Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
+#   hbetaVec <- as.numeric(hbeta[-1,])
+#   hyparameters <- hyperparameters(donnees,n)
+#   stock <- sapply(1:S, function(u){
+#                                   s <- rImportancepx(hbetaVec,hlambda,n)
+#                                   OneIterImportancepx(donnees,s$beta,s$lambda,hbetaVec,hlambda,hyparameters,n,TT,g,log=TRUE)
+#   })
+#   return(logsum(stock) - log(S))
+# }
+# 
+# Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
+#   # partie sur les poids 
+#   hbetaVec <- as.numeric(hbeta[-1,])
+#   hyparameters <- hyperparameters(donnees,n)
+#   stock <- sapply(1:S, function(u){
+#                                   s <- rImportancepxz(hbetaVec,n)
+#                                   OneIterImportancepxz(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
+#                                   })
+#   p1 <- logsum(stock) - log(S)
+#   # partie sur les composantes
+#   # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
+#   
+#   a <- hyparameters$poisson$a
+#   b <- hyparameters$poisson$b
+#   p2 <- sum(sapply(1:g, function(j){
+#     s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
+#     s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
+#     s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
+#     a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
+#   }))
+#   
+#   return(p1 + p2)
+# }
 
 estimation_LVC_modele_poids <- function(S=100,hbeta,z,n=1,TT,g){
   hbetaVec <- as.numeric(hbeta[-1,]) 
