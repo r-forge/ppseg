@@ -76,22 +76,24 @@ dImportancepxz <- function(betaVec,hbetaVec,n,log=TRUE){
 }
 
 # rImportancepz 
-rImportancepz <- function(hpoids,n,TT,g){
+rImportancepz <- function(donnees,hlambda,hpoids,n,TT,g){
   sim_z <- array(0,c(n,TT,g))
+  h <- matrice_H(donnees,hlambda,hpoids)
   for(i in 1:n){
     for(k in 1:TT){
-      sim_z[i,k,sample(g,1,prob=hpoids[k,])] <- 1
+      sim_z[i,k,sample(g,1,prob=h[i,k,])] <- 1
     }
   }
   return(sim_z)
 }
 
 # dImportancepz
-dImportancepz <- function(z,hpoids,n,TT,g,log=TRUE){
+dImportancepz <- function(z,hlambda,hpoids,n,TT,g,log=TRUE){
   ret <- 0
+  h <- matrice_H(donnees,hlambda,hpoids)
   for(i in 1:n){
     for(k in 1:TT){
-      ret <- ret + log(hpoids[k,which(z[i,k,]==1)])  
+      ret <- ret + log(h[i,k,which(z[i,k,]==1)])
     }
   }
   if(!log){
@@ -206,10 +208,11 @@ Integratedlikelihood <- function(S=100,donnees,hbeta,hlambda,n,TT,g){
 }
 
 # Methode 2 : BIC
-BIC <- function(donnees,hbeta,hlambda,n,TT,g){
+BIC_select <- function(donnees,hbeta,hlambda,n,TT,g){
   hbetaVec <- as.numeric(hbeta[-1,])
   return(likelihood(donnees,hbetaVec,hlambda,n,TT,g,log=TRUE) - ((g-1)*2+g)*log(n*TT)/2) 
 }
+
 
 # Methode 3 : IS sur z avec methode 1 de p(x,z|m)
 Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
@@ -222,7 +225,7 @@ Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
   return(logsum(stock) - log(S))
 }
 
-# Methode 3 : IS sur z avec methode 2 de p(x,z|m)
+# Methode 4 : IS sur z avec methode 2 de p(x,z|m)
 Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
   hbetaVec <- as.numeric(hbeta[-1,])
   hyparameters <- hyperparameters(donnees,n)
@@ -232,6 +235,74 @@ Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
   })
   return(logsum(stock) - log(S))
 }
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# modification du la methode pour ne pas faire des calcul deja fait 
+# Methode 3 : IS sur z avec methode 1 de p(x,z|m)
+Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  
+  elem <- vector("list",S+1)
+  elem[[1]]$z <- zMAP
+  elem[[1]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,zMAP,n,TT,g) - dImportancepz(zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
+  dif <- 1
+  new <- TRUE
+  
+  stock <- rep(0,S)
+  for(u in 1:S){
+    s_z <- rImportancepz(donnees,hlambda,hpoids,n,TT,g)
+    new <- TRUE
+    for(ind in 1:dif){
+      if(sum(s_z==elem[[ind]]$z)==TT*g){
+        new <- FALSE
+        stock[u] = elem[[ind]]$val
+      }
+    }
+    if(new){
+      dif <- dif + 1
+      elem[[dif]]$z <- s_z
+      elem[[dif]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hlambda,hpoids,n,TT,g,log=TRUE)
+      stock[u] = elem[[dif]]$val
+    }
+  }
+  
+  return(logsum(stock) - log(S))
+}
+
+# Methode 4 : IS sur z avec methode 2 de p(x,z|m)
+Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT,g){
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  
+  elem <- vector("list",S+1)
+  elem[[1]]$z <- zMAP
+  elem[[1]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,zMAP,n,TT,g) - dImportancepz(zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
+  dif <- 1
+  new <- TRUE
+  
+  stock <- rep(0,S)
+  for(u in 1:S){
+    s_z <- rImportancepz(donnees,hlambda,hpoids,n,TT,g)
+    new <- TRUE
+    for(ind in 1:dif){
+      if(sum(s_z==elem[[ind]]$z)==TT*g){
+        new <- FALSE
+        stock[u] = elem[[ind]]$val
+      }
+    }
+    if(new){
+      dif <- dif + 1
+      elem[[dif]]$z <- s_z
+      elem[[dif]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hlambda,hpoids,n,TT,g,log=TRUE)
+      stock[u] = elem[[dif]]$val
+    }
+  }
+
+  return(logsum(stock) - log(S))
+}
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 

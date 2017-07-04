@@ -107,7 +107,8 @@ EM <- function(donnees,g,nb_iteration_max=50,eps=2*10^-4){
       # ---------------------------------------------------------------------- #
     }
     # *************************************************************** #
-    return(list(poids=poids,beta=beta,lambda=lambda,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
+    H <- matrice_H(donnees,lambda,poids)
+    return(list(poids=poids,beta=beta,lambda=lambda,H=H,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
   }
 }
 
