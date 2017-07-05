@@ -61,6 +61,17 @@ dImportancepx <- function(betaVec,lambda,hbetaVec,hlambda,n,log=TRUE){
   return(ret)
 }
 
+# Matrix Sigma
+Varpxz <- function(hbetaVec,z,g){
+  V <- matrix(0,2*(g-1),2*(g-1))
+  eb <- c(1,sapply(2:g,function(k) exp(hbetaVec[(k-2)*2+1]+hbetaVec[(k-2)*2+2]*t)))
+  s <- sum(eb)
+  s2 <- s^2
+  for(k in 1:g){
+    
+  }
+}
+
 # rImportancepxz
 rImportancepxz <- function(hbetaVec,n){
   return( list( beta = rnorm(length(hbetaVec),hbetaVec,(10/sqrt(n))) ) )

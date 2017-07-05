@@ -27,8 +27,8 @@ EM <- function(donnees,g,nb_iteration_max=50,eps=2*10^-4){
   if(g==1){
     TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
     n <- length(donnees[,1])          # n est le nombre d individus 
-    poids <- 1
-    beta <- c(0,0)
+    poids <- matrix(1,nrow=TT,ncol=1)
+    beta <- matrix(0,nrow=1,ncol=2)
     lambda <- sum(donnees)/n
     croissance <- TRUE
     m <- 1
