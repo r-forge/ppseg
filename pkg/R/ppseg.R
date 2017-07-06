@@ -50,20 +50,24 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
   if(g==1){
     ppseg@segmentation$MAP <- ppseg@partition$estimated
     ppseg@partition$MAP <- ppseg@partition$estimated
+    # criteria
+    ppseg@criteria$log_likelihoodinteg_IS <- log_critere_g1(donnees) 
+    ppseg@criteria$log_likelihoodinteg_BIC <- ppseg@criteria$log_likelihoodinteg_IS
+    ppseg@criteria$log_likelihoodinteg_IS_z_IS <- ppseg@criteria$log_likelihoodinteg_IS
+    ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
+    ppseg@criteria$log_likelihoodcompletedinteg_IS <- ppseg@criteria$log_likelihoodinteg_IS
+    ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
   }else{
     ppseg@segmentation$MAP <- MAP_seg_Vec(resEM$beta,TT)
     ppseg@partition$MAP <- MAP_mat(zMAP)
+    # criteria
+    ppseg@criteria$log_likelihoodinteg_IS <- Integratedlikelihood(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
+    ppseg@criteria$log_likelihoodinteg_BIC <- BIC_select(donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
+    ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
   }
-  
-  print("C")
-  # criteria
-  ppseg@criteria$log_likelihoodinteg_IS <- Integratedlikelihood(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
-  ppseg@criteria$log_likelihoodinteg_BIC <- BIC_select(donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
-  ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
-  ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
-  ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
-  ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
-  
   return(ppseg)
 }
 
@@ -73,7 +77,7 @@ ppseg <- function(donnees,gtests,S=1000,nb_tests=4,nbcpu=3){
   
   for(k in gtests){
     print(k)
-    out@results[[gtests[k]]] <- ppsegestimgfixed(donnees,g=gtests[k],S,nb_tests,nbcpu)
+    out@results[[k]] <- ppsegestimgfixed(donnees,g=k,S,nb_tests,nbcpu)
   }
   return(out)
 }
