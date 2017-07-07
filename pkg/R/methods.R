@@ -25,23 +25,22 @@ setMethod(
   }
 )
 
-# setMethod(
-#   f="summary",
-#   signature = c("PPsegOutput"),
-#   definition = function(x){
-#     cat("*** Data used ***\n")
-#     cat("n =",x@data@n," & T =",x@data@TT,"\n")
-#     cat("*** Result ***\n")
-#     gestim <- sapply(x@results, function(j) nrow(j@parameter$beta))
-#     crit <- sapply(x@results, function(j) j@criteria$log_likelihoodinteg_BIC)
-#     cat("With the BIC criteria \n")
-#     cat(names(which.max(crit)),"with criteria = ",max(crit),"\n")
-#     cat("**************\n")        
-#   }
-# )
-# 
-# 
-# 
+setMethod(
+  f="summary",
+  signature = c("PPsegOutput"),
+  definition = function(object){
+    x <- object
+    cat("*** Data used ***\n")
+    cat("n =",x@data@n," & T =",x@data@TT,"\n")
+    cat("*** Result ***\n")
+    gestim <- sapply(x@results, function(j) nrow(j@parameter$beta))
+    crit <- sapply(x@results, function(j) j@criteria$log_likelihoodinteg_BIC)
+    cat("With the BIC criteria \n")
+    cat(names(which.max(crit)),"with criteria = ",max(crit),"\n")
+    cat("**************\n")        
+  }
+)
+ 
 
 
 
