@@ -6,6 +6,86 @@
 # ************************************************************************************** #
 
 
+# Matrice covariance pour les betas à t fixé
+Matcovbeta_tfixed <- function(t,betaVec,n,g){
+  e <- c(0,sapply(1:(g-1), function(k) betaVec[2*(k-1)+1]+betaVec[2*(k-1)+2]*t))
+  log_s <- logsum(e)
+  
+  M <- matrix(0,2*(g-1),2*(g-1))
+  for(k in 1:(g-1)){
+    # blocs diagonaux /2
+    M[2*(k-1)+1,2*(k-1)+1] <- exp( e[k+1]+logsum(e[-k-1])-2*log_s ) / 2
+    M[2*(k-1)+2,2*(k-1)+1] <- t * M[2*(k-1)+1,2*(k-1)+1]
+    M[2*(k-1)+1,2*(k-1)+2] <- M[2*(k-1)+2,2*(k-1)+1]
+    M[2*(k-1)+2,2*(k-1)+2] <- t**2 * M[2*(k-1)+1,2*(k-1)+1]
+    
+    # autres blocs
+    if(k!=(g-1)){
+      for(j in (k+1):(g-1)){
+        M[2*(k-1)+1,2*(j-1)+1] <- exp( e[k+1]+e[j+1]-2*log_s )
+        M[2*(k-1)+1,2*(j-1)+2] <- t * M[2*(k-1)+1,2*(j-1)+1]
+        M[2*(k-1)+2,2*(j-1)+1] <- M[2*(k-1)+2,2*(j-1)+1]
+        M[2*(k-1)+2,2*(j-1)+2] <- t**2 * M[2*(k-1)+1,2*(j-1)+1]
+      }
+    }
+  }
+  M <- M + t(M)
+  M <- (g-1+exp(-log_s))*M
+  return(M)
+}
+
+Matcovbeta <- function(betaVec,n,TT,g){
+  M <- lapply(1:TT,function(t) Matcovbeta_tfixed(t/TT,betaVec,n,g))
+  ret <- M[[1]]
+  for(j in 2:TT){
+    ret <- ret + M[[j]]
+  }
+  return(ret)
+}
+
+# *******************************************************************************************
+# *******************************************************************************************
+# *******************************************************************************************
+# dImportancepxz avec estimation matrice cov
+dImportancepxz_bis <- function(betaVec,hbetaVec,n,TT,g,log=TRUE){
+  Mcov <- Matcovbeta(hbetaVec,n,TT,g)
+  ret <- dmvnorm(betaVec,mean=hbetaVec,sigma=solve(Mcov),log=TRUE)
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret)
+}
+
+# rImportancepz avec estimation matrice cov
+rImportancepxz_bis <- function(hbetaVec,n,TT,g){
+  Mcov <- Matcovbeta(hbetaVec,n,TT,g)
+  return( list( beta = rmvnorm(1,mean=hbetaVec,sigma=solve(Mcov)) ) )
+}
+
+# Calcul de p(x,z,theta|m)
+partOnepxz <- function(donnees,betaVec,zMAP,hyparameters,n,TT,g,log=TRUE){
+  # partie sur les poids 
+  ret <- likelihoodcompleted_weight(donnees,betaVec,zMAP,n,TT,g,log=TRUE) + dlogisticprior(betaVec,hyparameters$logistic$mu,hyparameters$logistic$sigma,log=TRUE) 
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+
+# OneIterImportancepxz
+OneIterImportancepxz_bis <- function(donnees,betaVec,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE){
+  ret <- partOnepxz(donnees,betaVec,zMAP,hyparameters,n,TT,g,log=TRUE) - dImportancepxz_bis(betaVec,hbetaVec,n,TT,g,log=TRUE)
+  if(!log){
+    ret <- exp(ret)
+  }
+  return(ret) 
+}
+# *******************************************************************************************
+# *******************************************************************************************
+# *******************************************************************************************
+
+
+
 # ************************************************************************************** # 
 # ************************************************************************************** # 
 #                         FONCTIONS SUPPLEMENTAIRES DU  28/06                            #
@@ -98,6 +178,7 @@ rImportancepz <- function(donnees,hlambda,hpoids,n,TT,g){
   return(sim_z)
 }
 
+
 # dImportancepz
 dImportancepz <- function(z,hlambda,hpoids,n,TT,g,log=TRUE){
   ret <- 0
@@ -151,6 +232,8 @@ OneIterImportancepxz <- function(donnees,betaVec,hbetaVec,zMAP,hyparameters,n,TT
   return(ret) 
 }
 
+
+
 # --------------------------------------------------------- #
 #                     p(x,z|m)                              #
 # --------------------------------------------------------- #
@@ -163,6 +246,31 @@ Integratedlikelihoodcompleted <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
   stock <- sapply(1:S, function(u){
     s <- rImportancepxz(hbetaVec,n)
     OneIterImportancepxz(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
+  })
+  p1 <- logsum(stock) - log(S)
+  # partie sur les composantes
+  # p2 <- estimation_LVC_modele_composante(donnees,zMAP,n,TT,g)
+  
+  a <- hyparameters$poisson$a
+  b <- hyparameters$poisson$b
+  p2 <- sum(sapply(1:g, function(j){
+    s1 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) donnees[i,k]*zMAP[i,k,j] )) ))
+    s2 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j] )) ))
+    s3 <- sum(sapply(1:n, function(i) sum(sapply(1:TT, function(k) zMAP[i,k,j]*lgamma(donnees[i,k]+1) )) ))
+    a*log(b) + lgamma(s1+a) -  lgamma(a) - (s1 + a)*log(b+s2) - s3
+  }))
+  
+  return(p1 + p2)
+}
+
+# Methode 1 BIS : IS + partie exacte poisson
+Integratedlikelihoodcompleted_bis <- function(S=100,donnees,hbeta,zMAP,n,TT,g){
+  # partie sur les poids 
+  hbetaVec <- as.numeric(hbeta[-1,])
+  hyparameters <- hyperparameters(donnees,n)
+  stock <- sapply(1:S, function(u){
+    s <- rImportancepxz_bis(hbetaVec,n,TT,g)
+    OneIterImportancepxz_bis(donnees,s$beta,hbetaVec,zMAP,hyparameters,n,TT,g,log=TRUE)
   })
   p1 <- logsum(stock) - log(S)
   # partie sur les composantes

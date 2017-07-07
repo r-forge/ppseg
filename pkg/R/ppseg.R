@@ -46,7 +46,6 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
   ppseg@log_likelihood <- resEM$log_vraisemblance
   
   print("B")
-  zMAP <- MAP(donnees,g,lambda=resEM$lambda,beta=resEM$beta)
   if(g==1){
     ppseg@segmentation$MAP <- ppseg@partition$estimated
     ppseg@partition$MAP <- ppseg@partition$estimated
@@ -56,8 +55,10 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
     ppseg@criteria$log_likelihoodinteg_IS_z_IS <- ppseg@criteria$log_likelihoodinteg_IS
     ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
     ppseg@criteria$log_likelihoodcompletedinteg_IS <- ppseg@criteria$log_likelihoodinteg_IS
+    ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- ppseg@criteria$log_likelihoodinteg_IS
     ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
   }else{
+    zMAP <- MAP(donnees,g,lambda=resEM$lambda,beta=resEM$beta)
     ppseg@segmentation$MAP <- MAP_seg_Vec(resEM$beta,TT)
     ppseg@partition$MAP <- MAP_mat(zMAP)
     # criteria
@@ -66,6 +67,7 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
     ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
     ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
     ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- Integratedlikelihoodcompleted_bis(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
     ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
   }
   return(ppseg)

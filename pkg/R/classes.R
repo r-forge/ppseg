@@ -26,6 +26,7 @@ setClass(
                     log_likelihoodinteg_IS_z_IS = numeric(),
                     log_likelihoodinteg_IS_z_BIClogi = numeric(),
                     log_likelihoodcompletedinteg_IS = numeric(),
+                    log_likelihoodcompletedinteg_IS_bis = numeric(),
                     log_likelihoodcompletedinteg_BIClogi = numeric())
   )  
 )

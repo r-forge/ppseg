@@ -6,7 +6,8 @@ MAP <- function(donnees,g,lambda,beta){
   TT <- length(donnees[1,])
   n <- length(donnees[,1])
   
-  poids <- ensemble_poids(beta,TT)
+  betaVec <- as.numeric(beta[-1,]) 
+  poids <- ensemble_poids_2(betaVec,TT,g)
   h <- matrice_H(donnees,lambda,poids)
   
   z <- array(0,c(n,TT,g))
