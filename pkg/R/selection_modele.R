@@ -5,37 +5,40 @@
 #                                                                                        #
 # ************************************************************************************** #
 
-
-# Matrice covariance pour les betas à t fixé
-Matcovbeta_tfixed <- function(t,betaVec,n,g){
+# Bloc pour matrice covariance 
+Bloc_diag <- function(bloc,t,betaVec,n,g){
   e <- c(0,sapply(1:(g-1), function(k) betaVec[2*(k-1)+1]+betaVec[2*(k-1)+2]*t))
-  log_s <- logsum(e)
   
-  M <- matrix(0,2*(g-1),2*(g-1))
+  B <- matrix(c(1,t,t,t**2),2,2)
+  B <- n*exp( e[bloc+1] + logsum(e[-(bloc+1)]) - 2*logsum(e) )*B
+  return(B)
+}
+
+
+Bloc_non_diag <- function(bloc,t,betaVec,n,g){
+  e <- c(0,sapply(1:(g-1), function(k) betaVec[2*(k-1)+1]+betaVec[2*(k-1)+2]*t))
+  
+  B <- matrix(c(1,t,t,t**2),2,2)
+  B <- - n*exp( e[bloc[1]+1] + e[bloc[2]+1] - 2*logsum(e) )*B
+  return(B)
+}
+
+Assemblage_Matcov <-function(t,betaVec,n,g){
+  M2 <- matrix(0,2*(g-1),2*(g-1))
   for(k in 1:(g-1)){
-    # blocs diagonaux /2
-    M[2*(k-1)+1,2*(k-1)+1] <- exp( e[k+1]+logsum(e[-k-1])-2*log_s ) / 2
-    M[2*(k-1)+2,2*(k-1)+1] <- t * M[2*(k-1)+1,2*(k-1)+1]
-    M[2*(k-1)+1,2*(k-1)+2] <- M[2*(k-1)+2,2*(k-1)+1]
-    M[2*(k-1)+2,2*(k-1)+2] <- t**2 * M[2*(k-1)+1,2*(k-1)+1]
-    
-    # autres blocs
-    if(k!=(g-1)){
-      for(j in (k+1):(g-1)){
-        M[2*(k-1)+1,2*(j-1)+1] <- exp( e[k+1]+e[j+1]-2*log_s )
-        M[2*(k-1)+1,2*(j-1)+2] <- t * M[2*(k-1)+1,2*(j-1)+1]
-        M[2*(k-1)+2,2*(j-1)+1] <- M[2*(k-1)+2,2*(j-1)+1]
-        M[2*(k-1)+2,2*(j-1)+2] <- t**2 * M[2*(k-1)+1,2*(j-1)+1]
+    for(j in 1:(g-1)){
+      if(j==k){
+        M2[ (2*(k-1)+1) : (2*(k-1)+2) , (2*(j-1)+1) : (2*(j-1)+2) ] <- Bloc_diag( bloc=k ,t,betaVec,n,g)
+      }else{
+        M2[ (2*(k-1)+1) : (2*(k-1)+2) , (2*(j-1)+1) : (2*(j-1)+2) ] <- Bloc_non_diag( bloc=c(k,j) ,t,betaVec,n,g)
       }
     }
   }
-  M <- M + t(M)
-  M <- (g-1+exp(-log_s))*M
-  return(M)
+  return(M2)
 }
 
 Matcovbeta <- function(betaVec,n,TT,g){
-  M <- lapply(1:TT,function(t) Matcovbeta_tfixed(t/TT,betaVec,n,g))
+  M <- lapply(1:TT,function(t) Assemblage_Matcov(t/TT,betaVec,n,g))
   ret <- M[[1]]
   for(j in 2:TT){
     ret <- ret + M[[j]]
@@ -141,16 +144,6 @@ dImportancepx <- function(betaVec,lambda,hbetaVec,hlambda,n,log=TRUE){
   return(ret)
 }
 
-# Matrix Sigma
-Varpxz <- function(hbetaVec,z,g){
-  V <- matrix(0,2*(g-1),2*(g-1))
-  eb <- c(1,sapply(2:g,function(k) exp(hbetaVec[(k-2)*2+1]+hbetaVec[(k-2)*2+2]*t)))
-  s <- sum(eb)
-  s2 <- s^2
-  for(k in 1:g){
-    
-  }
-}
 
 # rImportancepxz
 rImportancepxz <- function(hbetaVec,n){
@@ -423,7 +416,27 @@ Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# **************************************************************************** # 
+#                         quand g = 1
+# **************************************************************************** # 
 
+log_critere_g1 <- function(donnees){
+  TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
+  n <- length(donnees[,1])          # n est le nombre d individus 
+  
+  moyenne <- mean(donnees)
+  variance <- sd(donnees)**2
+  a <- moyenne**2 / variance
+  b <- moyenne / variance
+  c2 <- 0
+  for(i in 1:n){
+    for(k in 1:TT){
+      c2 <- c2 - lgamma(donnees[i,k]+1)
+    }
+  }
+  c <- sum(donnees)
+  return(- c*log(TT) + c2 + a*log(b) - (c+a)*log(n+b) + lgamma(c+a) - lgamma(a))
+}
 
 # ************************************************************************************** #        
 # ************************************************************************************** # 
@@ -567,27 +580,7 @@ estimation_LVC_modele_composante <- function(donnees,z,n,TT,g){
 log_critere_ICL <- function(S=100,hbeta,donnees,z,n,TT,g){
   return( estimation_LVC_modele_poids(S,hbeta,z,n,TT,g) + estimation_LVC_modele_composante(donnees,z,n,TT,g) )
 }
-# **************************************************************************** # 
-#                         quand g = 1
-# **************************************************************************** # 
 
-log_critere_g1 <- function(donnees){
-  TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
-  n <- length(donnees[,1])          # n est le nombre d individus 
-  
-  moyenne <- mean(donnees)
-  variance <- sd(donnees)**2
-  a <- moyenne**2 / variance
-  b <- moyenne / variance
-  c2 <- 0
-  for(i in 1:n){
-    for(k in 1:TT){
-      c2 <- c2 - lgamma(donnees[i,k]+1)
-    }
-  }
-  c <- sum(donnees)
-  return(- c*log(TT) + c2 + a*log(b) - (c+a)*log(n+b) + lgamma(c+a) - lgamma(a))
-}
   
 # **************************************************************************** # 
 #                         p( x | m )

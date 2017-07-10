@@ -16,7 +16,7 @@
 #                    EM                             #
 # ************************************************* #
 
-EM <- function(donnees,g,nb_iteration_max=50,eps=2*10^-4){
+EM <- function(donnees,g,nb_iteration_max=200,eps=2*10^-4){
 
   # *************************************************************** #
   #                       Initialisation                            #

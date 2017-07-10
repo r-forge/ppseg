@@ -9,22 +9,6 @@ selection_EM <- function(donnees, g, nb_tests=4, nbcpu=3){
   return(res_EM)
 }
 
-# **************************************************************************** # 
-# ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
-#   resEM <- selection_EM(donnees, g, nb_tests)
-#   resEM$zMAP <- MAP(donnees, g, resEM$lambda, resEM$beta)
-#   resEM$integratedlikelihood <- log_critere_BIC(S, donnees, resEM$beta, resEM$lambda, g)
-#   resEM$integratedcompletedlikelihood <- log_critere_ICL(S, 
-#                                                          resEM$beta,
-#                                                          donnees,
-#                                                          resEM$zMAP,
-#                                                          nrow(donnees), 
-#                                                          ncol(donnees),
-#                                                          g)
-#   resEM
-#   # Ici creer le S4
-# }
-
 
 ppsegestim <- function(donnees, test_group, S=1000, nb_tests=4, nbcpu=3)
   sapply(test_group, ppsegestim, donnees=donnees, S=S, nb_tests, nbcpu=nbcpu)
@@ -62,13 +46,13 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
     ppseg@segmentation$MAP <- MAP_seg_Vec(resEM$beta,TT)
     ppseg@partition$MAP <- MAP_mat(zMAP)
     # criteria
-    ppseg@criteria$log_likelihoodinteg_IS <- Integratedlikelihood(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
-    ppseg@criteria$log_likelihoodinteg_BIC <- BIC_select(donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
-    ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
-    ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
-    ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
-    ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- Integratedlikelihoodcompleted_bis(S,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
-    ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+    # ppseg@criteria$log_likelihoodinteg_IS <- Integratedlikelihood(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
+    # ppseg@criteria$log_likelihoodinteg_BIC <- BIC_select(donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
+    # ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+    # ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S=1000,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+    ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- Integratedlikelihoodcompleted_bis(S=1000,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+    # ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
   }
   return(ppseg)
 }
