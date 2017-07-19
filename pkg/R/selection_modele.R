@@ -52,7 +52,7 @@ Matcovbeta <- function(betaVec,n,TT,g){
 # dImportancepxz avec estimation matrice cov
 dImportancepxz_bis <- function(betaVec,hbetaVec,n,TT,g,log=TRUE){
   Mcov <- Matcovbeta(hbetaVec,n,TT,g)
-  ret <- dmvnorm(betaVec,mean=hbetaVec,sigma=solve(Mcov),log=TRUE)
+  ret <- dmvnorm(betaVec,mean=hbetaVec,sigma=ginv(Mcov),log=TRUE)
   if(!log){
     ret <- exp(ret)
   }
@@ -62,7 +62,7 @@ dImportancepxz_bis <- function(betaVec,hbetaVec,n,TT,g,log=TRUE){
 # rImportancepz avec estimation matrice cov
 rImportancepxz_bis <- function(hbetaVec,n,TT,g){
   Mcov <- Matcovbeta(hbetaVec,n,TT,g)
-  return( list( beta = rmvnorm(1,mean=hbetaVec,sigma=solve(Mcov)) ) )
+  return( list( beta = rmvnorm(1,mean=hbetaVec,sigma=ginv(Mcov)) ) )
 }
 
 # Calcul de p(x,z,theta|m)
@@ -173,7 +173,7 @@ rImportancepz <- function(donnees,hlambda,hpoids,n,TT,g){
 
 
 # dImportancepz
-dImportancepz <- function(z,hlambda,hpoids,n,TT,g,log=TRUE){
+dImportancepz <- function(donnees,z,hlambda,hpoids,n,TT,g,log=TRUE){
   ret <- 0
   h <- matrice_H(donnees,hlambda,hpoids)
   for(i in 1:n){
@@ -332,7 +332,7 @@ Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
   hyparameters <- hyperparameters(donnees,n)
   stock <- sapply(1:S, function(u){
     s_z <- rImportancepz(hpoids,n,TT,g)
-    Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hpoids,n,TT,g,log=TRUE)
+    Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(donnees,s_z,hpoids,n,TT,g,log=TRUE)
   })
   return(logsum(stock) - log(S))
 }
@@ -343,7 +343,7 @@ Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hpoids,n,TT,g){
   hyparameters <- hyperparameters(donnees,n)
   stock <- sapply(1:S, function(u){
     s_z <- rImportancepz(hpoids,n,TT,g)
-    Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hpoids,n,TT,g,log=TRUE)
+    Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(donnees,s_z,hpoids,n,TT,g,log=TRUE)
   })
   return(logsum(stock) - log(S))
 }
@@ -357,7 +357,7 @@ Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT
   
   elem <- vector("list",S+1)
   elem[[1]]$z <- zMAP
-  elem[[1]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,zMAP,n,TT,g) - dImportancepz(zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
+  elem[[1]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,zMAP,n,TT,g) - dImportancepz(donnees,zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
   dif <- 1
   new <- TRUE
   
@@ -374,7 +374,7 @@ Integratedlikelihood_z1 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT
     if(new){
       dif <- dif + 1
       elem[[dif]]$z <- s_z
-      elem[[dif]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hlambda,hpoids,n,TT,g,log=TRUE)
+      elem[[dif]]$val <- Integratedlikelihoodcompleted(100,donnees,hbeta,s_z,n,TT,g) - dImportancepz(donnees,s_z,hlambda,hpoids,n,TT,g,log=TRUE)
       stock[u] = elem[[dif]]$val
     }
   }
@@ -389,7 +389,7 @@ Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT
   
   elem <- vector("list",S+1)
   elem[[1]]$z <- zMAP
-  elem[[1]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,zMAP,n,TT,g) - dImportancepz(zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
+  elem[[1]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,zMAP,n,TT,g) - dImportancepz(donnees,zMAP,hlambda,hpoids,n,TT,g,log=TRUE)
   dif <- 1
   new <- TRUE
   
@@ -406,7 +406,7 @@ Integratedlikelihood_z2 <- function(S=100,donnees,hbeta,hlambda,hpoids,zMAP,n,TT
     if(new){
       dif <- dif + 1
       elem[[dif]]$z <- s_z
-      elem[[dif]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(s_z,hlambda,hpoids,n,TT,g,log=TRUE)
+      elem[[dif]]$val <- Integratedlikelihoodcompleted_BIC(donnees,hbeta,s_z,n,TT,g) - dImportancepz(donnees,s_z,hlambda,hpoids,n,TT,g,log=TRUE)
       stock[u] = elem[[dif]]$val
     }
   }

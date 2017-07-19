@@ -19,7 +19,7 @@ MAP <- function(donnees,g,lambda,beta){
   return(z)
 }
 
-MAP_mat <- function(zMAP){
+MAP_mat <- function(zMAP,n,TT){
   z <- matrix(0,n,TT)
   for (i in 1:n){
     for(k in 1:TT){
