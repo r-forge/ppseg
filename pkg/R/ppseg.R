@@ -57,10 +57,11 @@ ppsegestimgfixed <- function(donnees, g, S=1000, nb_tests=4, nbcpu=3){
 
 ppseg <- function(donnees,gtests,S=1000,nb_tests=4,nbcpu=3){
   out <- PPsegOutput(data=PPsegData(data=donnees),results=vector("list",length(gtests)))
-  names(out@results) <- paste("g =",gtests)
-  
+  names(out@results) <- paste("g = ",gtests)
+  cpt <- 1
   for(k in gtests){
-    out@results[[k]] <- ppsegestimgfixed(donnees,g=k,S,nb_tests,nbcpu)
+    out@results[[cpt]] <- ppsegestimgfixed(donnees,g=k,S,nb_tests,nbcpu)
+    cpt <- cpt + 1
   }
   return(out)
 }
