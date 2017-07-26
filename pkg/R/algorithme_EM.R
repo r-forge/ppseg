@@ -117,7 +117,7 @@ EM <- function(donnees,g,nb_iteration_max=1000,eps=2*10^-8){
 #                    EM reg                         #
 # ************************************************* #
 
-EMreg <- function(donnees,cova=array(1,dim=c(n,length(donnees[1,]),1)),g,nb_iteration_max=1000,eps=2*10^-8){
+EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
   
   # *************************************************************** #
   #                       Initialisation                            #
@@ -161,7 +161,7 @@ EMreg <- function(donnees,cova=array(1,dim=c(n,length(donnees[1,]),1)),g,nb_iter
     # alpha <- log(matrix(rep(0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE),p),g,p))
     
     alpha <- matrix(0,nrow=g,ncol=p+1)
-    alpha[,1] <- log(rep(0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE)),g)
+    alpha[,1] <- log(rep(0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE)))
     # lambda <- 0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE)
     beta <- rbind(c(0,0),matrix(runif(2*(g-1),-10,10),nrow=g-1,ncol=2))
     betaVec <- as.numeric(beta[-1,])
@@ -231,7 +231,7 @@ EMreg <- function(donnees,cova=array(1,dim=c(n,length(donnees[1,]),1)),g,nb_iter
     }
     # *************************************************************** #
     H <- matrice_Hreg(donnees,cova,alpha,poids)
-    return(list(poids=poids,alpha=alpha,lambda=lambda,H=H,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
+    return(list(poids=poids,beta=beta,alpha=alpha,H=H,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
   }
 }
 

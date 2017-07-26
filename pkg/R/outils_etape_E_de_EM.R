@@ -27,7 +27,7 @@ matrice_H <- function(donnees,lambda,poids){
 matrice_Hreg <- function(donnees,cova,alpha,poids){
   TT <- length(donnees[1,])
   n <- length(donnees[,1]) 
-  g <- length(lambda)
+  g <- length(alpha[,1]) 
   
   H <- array(0,c(n,TT,g))
   
