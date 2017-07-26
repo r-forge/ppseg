@@ -35,32 +35,6 @@ log_vraisemblance_poids <- function(betaVec,w,TT,g){
   return(res)
 }
 
-# log_vraisemblance_poids_2 <- function(betaVec,w,TT,g){
-#   res <- 0
-#   tmp_2 <- rep(0,g)
-#   for(k in 1:TT){
-#     p1 <- 0
-#     tmp_2[1] <- 0 
-#     for(j in 2:g){
-#       p1 <- p1 + (betaVec[j-1]+betaVec[(g-1)+(j-1)]*(k/TT))*w[g*(k-1)+j]
-#       tmp_2[j] <- betaVec[j-1]+betaVec[(g-1)+(j-1)]*(k/TT)
-#     }
-#     m <- max(tmp_2)
-#     s1 <- 0
-#     for(j in 1:g){
-#       s1 <- s1 +  w[g*(k-1)+j]
-#     }
-#     p2 <- 0
-#     p2 <- m*s1
-#     s2 <- 0
-#     for(j in 1:g){
-#       s2 <- s2 + exp(tmp_2[j]-m)
-#     }
-#     p2 <- p2 + s1*log(s2)
-#     res <- res + p1 - p2
-#   }
-#   return(res)
-# }
 
 # Version optimisee
 log_vraisemblance_poids_2 <- function(betaVec,w,TT,g){
@@ -88,32 +62,6 @@ grad_log_vraisemblance_poids <- function(betaVec,w,TT,g){
   return(c(m_grad[1,],m_grad[2,]))
 }
 
-# grad_log_vraisemblance_poids_2 <- function(betaVec,w,TT,g){
-#   res <- rep(0,2*(g-1))
-#   tmp_3 <- matrix(0,TT,g)
-#   for(k in 1:TT){
-#     for(j in 2:g){
-#       tmp_3[k,j] <- betaVec[j-1]+betaVec[(g-1)+(j-1)]*(k/TT) 
-#     }
-#     m[k] <- max(tmp_3[k,])
-#   }
-#   for(j in 2:g){
-#     for(k in 1:TT){
-#       s1 <- 0
-#       ss1 <- 0
-#       ss2 <- 0
-#       for(jj in 1:g){
-#         ss1 <- ss1 + exp(tmp_3[k,jj] - m[k])
-#         ss2 <- ss2 + w[g*(k-1)+jj]
-#       } 
-#       s1 <- tmp_3[k,j] - m[k] - log(ss1)
-#       res[j-1] <- res[j-1] + w[g*(k-1)+j] - exp(s1)*ss2
-#       res[g-1+j-1] <- res[g-1+j-1] + (k/TT)*(w[g*(k-1)+j] - exp(s1)*ss2)
-#     }
-#   } 
-#   return(res)
-# }
-
 # Version optimisee
 grad_log_vraisemblance_poids_2 <- function(betaVec,w,TT,g){
   tmp_3 <- t(sapply(1:TT,function(k) c(0,sapply(2:g, function(jj) betaVec[jj-1]+betaVec[(g-1)+(jj-1)]*(k/TT)))))
@@ -132,34 +80,63 @@ grad_log_vraisemblance_poids_2 <- function(betaVec,w,TT,g){
 # ------------------------------------------------------------- #
 
 
-#  -> Sauvegarde d'une fonction grad qui fonctionne <-
-#
-# grad_log_vraisemblance_poids <- function(betaVec,H){
-#   # --------------------
-#   n <- dim(H)[1]
-#   TT <- dim(H)[2]
-#   g <- dim(H)[3]
-#   # --------------------
-#   # somme sur les i de H[i,k,j]
-#   w <- rowSums(sapply(1:(dim(H)[1]), function(i) as.numeric(t(H[i,,])))) 
-#   # --------------------
-#   grad <- rep(0,(2*g-2))
-#   for(j in 2:g){ # j=2
-#     for(k in 1:TT){ # k = 1
-#       s1 <-  w[g*(k-1)+1]
-#       s2 <- 1
-#       for(jj in 2:g){ # jj=2
-#         # s1 <- s1 + w[g*(k-1)+jj]*exp(betaVec[jj-1]+betaVec[(g-1)+(jj-1)]*(k/TT))
-#         s1 <- s1 + w[g*(k-1)+jj]
-#         s2 <- s2 + exp(betaVec[jj-1]+betaVec[(g-1)+(jj-1)]*(k/TT))
-#       }
-#       s1 <- s1 * exp(betaVec[j-1]+betaVec[(g-1)+(j-1)]*(k/TT))
-#       grad[j-1] <- grad[j-1] + w[g*(k-1)+j] - s1/s2
-#       grad[(g-1)+j-1] <- grad[(g-1)+j-1] + (k/TT)*(w[g*(k-1)+j] - s1/s2)
-#     }
+log_vraisemblance_composante <- function(alphaVec,donnees,cova,H,n,TT,gg,pp){
+  res <- sum(sapply(1:n, function(i){
+            sum(sapply(1:TT, function(j){
+              sum(sapply(1:gg, function(k){
+                # a <- 7 # (alphaVec[((k-1)*p+1):(k*p)]%*%cova[k,j,])[1]
+                H[i,j,k] * dpois(donnees[i,j],exp(sum(alphaVec[((k-1)*pp+1):(k*pp)]*cova[i,j,])),log=TRUE)
+              }))
+            })) 
+          }))
+  return(res)
+}
+
+grad_log_vraisemblance_composante <- function(alphaVec,donnees,cova,H,n,TT,gg,pp){
+#   m_grad <- sapply(1:p, function(l){
+#               lapply(1:g, function(k){
+#                 sum(sapply(1:n, function(i){
+#                   sum(sapply(1:TT, function(j){
+#                     a <- 7 # (alphaVec[((k-1)*p+1):(k*p)]%*%cova[k,j,])[1]
+#                     H[i,j,k] * ( donnees[i,j]*cova[k,j,l] - cova[k,j,l]*exp(a)/TT ) 
+#                   }))
+#                 }))  
+#               })
+#             })
+  m_grad <- matrix(0,nrow = gg,ncol = pp)
+#   for(l in 1:p){
+#     m_grad[,l] <- sapply(1:g, function(k){
+#                     sum(sapply(1:TT, function(j){
+#                       sum(sapply(1:n, function(i){
+#                         a <- 7 # (alphaVec[((k-1)*p+1):(k*p)]%*%cova[k,j,])[1]
+#                         H[i,j,k] * ( donnees[i,j]*cova[k,j,l] - cova[k,j,l]*exp(a)/TT ) 
+#                       }))
+#                     }))  
+#                   })
 #   }
-#   return(grad)
-# }
+  m_grad[,1] <- sapply(1:gg, function(k){
+    sum(sapply(1:TT, function(j){
+      sum(sapply(1:n, function(i){
+        a <- sum(alphaVec[((k-1)*pp+1):(k*pp)]*cova[i,j,])
+        H[i,j,k] * ( donnees[i,j]*cova[i,j,l] - cova[i,j,l]*exp(a)/TT ) 
+      }))
+    }))  
+  })
+  return(c(m_grad))
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

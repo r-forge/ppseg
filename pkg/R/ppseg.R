@@ -11,7 +11,7 @@ selection_EM <- function(donnees, g, nb_tests=4, nbcpu=3){
 
 
 ppsegestim <- function(donnees, test_group, S=1000, nb_tests=4, nbcpu=3)
-  sapply(test_group, ppsegestim, donnees=donnees, S=S, nb_tests, nbcpu=nbcpu)
+  sapply(test_group, ppsegestimgfixed, donnees=donnees, S=S, nb_tests, nbcpu=nbcpu)
 
 
 
