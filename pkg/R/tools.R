@@ -126,13 +126,13 @@ likelihoodcompleted_weight <- function(donnees,betaVec,z,n,TT,g,log=TRUE){
 # ************************************************************************** #
 
 # trouve la partition
-MAPreg <- function(donnees,cova,g,alpha,beta){
+MAPreg <- function(donnees,cova=array(0),g,alpha,beta){
   TT <- length(donnees[1,])
   n <- length(donnees[,1])
   
   betaVec <- as.numeric(beta[-1,]) 
   poids <- ensemble_poids_2(betaVec,TT,g)
-  h <- matrice_Hreg(donnees,cova,alpha,poids)
+  h <- matrice_Hreg(donnees,cova,alpha,poids,reg=(length(cova)!=1))
   
   z <- array(0,c(n,TT,g))
   for (i in 1:n){
@@ -151,12 +151,20 @@ MAPreg <- function(donnees,cova,g,alpha,beta){
 # ************************************************************************** #
 
 # calcul de la vraisemblance
-likelihoodreg <- function(donnees,cova,betaVec,alpha,n,TT,g,log=TRUE){
+likelihoodreg <- function(donnees,cova=array(0),betaVec,alpha,n,TT,g,log=TRUE){
+  reg <- FALSE
+  if(length(dim(cova))!=1){
+    reg<- TRUE
+  }
   ret <- sum(sapply(1:TT, function(k){
     e <- c(0,sapply(2:g,function(jj) betaVec[jj-1]+betaVec[g-1+jj-1]*(k/TT)))
     ss2 <- logsum(e)
     sum(sapply(1:n, function(i){
-      dp <- sapply(1:g, function(j) dpois(donnees[i,k],exp(sum(alpha[j,]*c(1,cova[i,k,])))/TT, log=TRUE))
+      if(reg){
+        dp <- sapply(1:g, function(j) dpois(donnees[i,k],exp(sum(alpha[j,]*c(1,cova[i,k,])))/TT, log=TRUE))
+      }else{
+        dp <- sapply(1:g, function(j) dpois(donnees[i,k],exp(alpha[j,1])/TT, log=TRUE))
+      }
       logsum(e+dp) - ss2
     }))
   }))

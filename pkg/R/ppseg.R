@@ -10,7 +10,7 @@ selection_EM <- function(donnees, g, nb_tests=4, nbcpu=3){
 }
 
 
-selection_EMreg <- function(donnees, cova, g, nb_tests=4, nbcpu=3){
+selection_EMreg <- function(donnees, cova=array(0), g, nb_tests=4, nbcpu=3){
   # ------------------------------------------------- #
   #         premiere utilisation de EM                #
   res_EM <- mclapply(1:nb_tests, function(i) EMreg(donnees,cova,g), mc.silent=TRUE, mc.cores=nbcpu)
@@ -81,6 +81,78 @@ PPsegData <- function(data, range=c(0,1)){
   if (!(is.matrix(data))) stop("Input data must be an instance of matrix or numeric")
   new("PPsegData", data=data, n=nrow(data), TT=ncol(data), range=range)
 }
+
+
+
+# ********************************************************
+#                   Avec Covariable
+# ********************************************************
+
+
+ppsegregestimgfixed <- function(donnees, cova, g, S=1000, nb_tests=4, nbcpu=3){
+  TT <- length(donnees[1,])
+  n <- length(donnees[,1])
+  
+  ppseg <- new("PPsegreg")
+  ppseg@nb_group <- g
+  resEM <- selection_EMreg(donnees, cova, g, nb_tests, nbcpu)
+  ppseg@segmentation$estimated <- resEM$poids
+  ppseg@parameter$beta <- resEM$beta
+  ppseg@parameter$alpha <- resEM$alpha
+  ppseg@partition$estimated <- resEM$H
+  ppseg@log_likelihood <- resEM$log_vraisemblance
+  
+  if(g==1){
+    ppseg@segmentation$MAP <- ppseg@partition$estimated
+    ppseg@partition$MAP <- ppseg@partition$estimated
+    # criteria
+    ppseg@criteria$log_likelihoodinteg_IS <- log_critere_g1(donnees) 
+    ppseg@criteria$log_likelihoodinteg_BIC <- ppseg@criteria$log_likelihoodinteg_IS
+#     ppseg@criteria$log_likelihoodinteg_IS_z_IS <- ppseg@criteria$log_likelihoodinteg_IS
+#     ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
+#     ppseg@criteria$log_likelihoodcompletedinteg_IS <- ppseg@criteria$log_likelihoodinteg_IS
+#     ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- ppseg@criteria$log_likelihoodinteg_IS
+#     ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- ppseg@criteria$log_likelihoodinteg_IS
+  }else{
+    zMAP <- MAPreg(donnees,cova,g,alpha=resEM$alpha,beta=resEM$beta)
+    ppseg@segmentation$MAP <- MAP_seg_Vec(resEM$beta,TT)
+    ppseg@partition$MAP <- MAP_mat(zMAP,n,TT)
+    # criteria
+#     ppseg@criteria$log_likelihoodinteg_IS <- Integratedlikelihood(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,n,TT,g)
+     ppseg@criteria$log_likelihoodinteg_BIC <- BIC_select_reg(donnees,cova,hbeta=resEM$beta,halpha=resEM$alpha,n,TT,g)
+#     ppseg@criteria$log_likelihoodinteg_IS_z_IS <- Integratedlikelihood_z1(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+#     ppseg@criteria$log_likelihoodinteg_IS_z_BIClogi <- Integratedlikelihood_z2(S,donnees,hbeta=resEM$beta,hlambda=resEM$lambda,hpoids=resEM$poids,zMAP=zMAP,n,TT,g)
+#     ppseg@criteria$log_likelihoodcompletedinteg_IS <- Integratedlikelihoodcompleted(S=1000,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+#     ppseg@criteria$log_likelihoodcompletedinteg_IS_bis <- Integratedlikelihoodcompleted_bis(S=1000,donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+#     ppseg@criteria$log_likelihoodcompletedinteg_BIClogi <- Integratedlikelihoodcompleted_BIC(donnees,hbeta=resEM$beta,zMAP=zMAP,n,TT,g)
+  }
+  return(ppseg)
+}
+
+ppsegreg <- function(donnees,cova,gtests,S=1000,nb_tests=4,nbcpu=3){
+  out <- PPsegOutputReg(data=PPsegDataReg(data=donnees,y=cova),results=vector("list",length(gtests)))
+  names(out@results) <- paste("g = ",gtests)
+  cpt <- 1
+  for(k in gtests){
+    out@results[[cpt]] <- ppsegregestimgfixed(donnees,cova,g=k,S,nb_tests,nbcpu)
+    cpt <- cpt + 1
+  }
+  return(out)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

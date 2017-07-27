@@ -24,7 +24,7 @@ matrice_H <- function(donnees,lambda,poids){
 }
 # ------------------------------------------------- #
 
-matrice_Hreg <- function(donnees,cova,alpha,poids){
+matrice_Hreg <- function(donnees,cova,alpha,poids,reg=TRUE){
   TT <- length(donnees[1,])
   n <- length(donnees[,1]) 
   g <- length(alpha[,1]) 
@@ -33,7 +33,11 @@ matrice_Hreg <- function(donnees,cova,alpha,poids){
   
   for (i in 1:nrow(donnees)){
     tmp <- sapply(1:g, function(k){
-             sapply(1:TT, function(j) poids[j,k] * dpois(donnees[i,j], exp(sum(alpha[k,]*c(1,cova[i,j,])))/TT) )
+            if(reg==TRUE){
+              sapply(1:TT, function(j) poids[j,k] * dpois(donnees[i,j], exp(sum(alpha[k,]*c(1,cova[i,j,])))/TT) )
+            }else{
+              sapply(1:TT, function(j) poids[j,k] * dpois(donnees[i,j], exp(alpha[k,1])/TT) )
+            }
             }) 
     H[i,,] <- sweep(tmp, 1, rowSums(tmp), "/")
   }

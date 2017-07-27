@@ -117,36 +117,30 @@ EM <- function(donnees,g,nb_iteration_max=1000,eps=2*10^-8){
 #                    EM reg                         #
 # ************************************************* #
 
-EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
+EMreg <- function(donnees,cova=array(0),g,nb_iteration_max=1000,eps=2*10^-8){
   
   # *************************************************************** #
   #                       Initialisation                            #
+
+  regression <- FALSE
+  if(length(dim(cova))!=1){
+    regression <- TRUE
+  }
   
-  # Necessite de "donnees" et "g" comme parametre et le fichier "outils_poids.R"
+  TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
+  n <- length(donnees[,1])          # n est le nombre d individus 
+  p <- 0
   
-  # --- Si  g = 1 => maximun de vraisamblance --- #
-  if(g==1){
-    TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
-    n <- length(donnees[,1])          # n est le nombre d individus 
+  if(regression){
     p <- dim(cova)[3]
-    
-    poids <- matrix(1,nrow=TT,ncol=1)
-    beta <- matrix(0,nrow=1,ncol=2)
-    lambda <- sum(donnees)/n
-    croissance <- TRUE
-    m <- 1
-    Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(k) log(dpois(donnees[i,k],lambda/TT))))))
-    return(list(poids=poids,beta=beta,lambda=lambda,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
-  }else{
-    
-    TT <- length(donnees[1,])          # T est le nombre d intervalles dans [0;1] 
-    n <- length(donnees[,1])          # n est le nombre d individus 
-    p <- dim(cova)[3]
-    
-    # Structure pour glm des composantes 
+  }
+  
+  # Structure pour glm des composantes 
+  S <- data.frame()
+  if(regression){
     slist <- vector("list",p)
     for(l in 1:p){
-      slist[[l]] <- as.numeric(cova)[((l-1)*(n*TT)+1):(l*n*TT)]
+      slist[[l]] <- as.numeric(cova[,,l])
     }
     Scova <- data.frame(slist)
     for(l in 1:p){
@@ -154,15 +148,35 @@ EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
     }
     S <- data.frame(X = as.numeric(donnees))
     S <- cbind(S*TT,Scova)
-    #cbind(as.numeric(donnees),as.numeric(cova[,,1]))
-    # ---------------------------------------------------------------
-    
+  }
+  #cbind(as.numeric(donnees),as.numeric(cova[,,1]))
+  # ---------------------------------------------------------------
+
+  # --- Si  g = 1 => maximun de vraisamblance --- #
+  if(g==1){
+    poids <- matrix(1,nrow=TT,ncol=1)
+    beta <- matrix(0,nrow=1,ncol=2)
+    alpha <- matrix(0,nrow=1,ncol=p+1)
+    if(regression){
+      alpha <- matrix(glm(X~.,data=S,family=poisson())$coefficients,nrow=1)
+    }else{
+      alpha[1,1] <- log(sum(donnees)/n)
+    }
+    croissance <- TRUE
+    m <- 1
+    if(regression){
+      Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(j) log(sum(sapply(1:g,function(k) poids[j,k]*dpois(donnees[i,j],exp(sum(alpha[k,]*c(1,cova[i,j,])))/TT))))))))
+    }else{
+      Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(j) log(sum(sapply(1:g,function(k) poids[j,k]*dpois(donnees[i,j],exp(sum(alpha[k,]))/TT))))))))
+    }
+    return(list(poids=poids,beta=beta,alpha=alpha,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
+  }else{
+        
     # Initialisation des parametres \theta_0
     # alpha <- log(matrix(rep(0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE),p),g,p))
     
     alpha <- matrix(0,nrow=g,ncol=p+1)
     alpha[,1] <- log(rep(0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE)))
-    # lambda <- 0.01 + sample((TT*min(donnees)):(TT*max(donnees)),g,replace=TRUE)
     beta <- rbind(c(0,0),matrix(runif(2*(g-1),-10,10),nrow=g-1,ncol=2))
     betaVec <- as.numeric(beta[-1,])
     poids <- ensemble_poids_2(betaVec,TT,g)     # fonction presente dans fichier "outils_poids.R"
@@ -186,18 +200,24 @@ EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
       # ------------------------------------------------- #
       m <- m + 1
       Log_vraisemblance_precedent <- Log_vraisemblance
-      
+
+
       # ------------------------------------------------- #
       #                    Etape (E)                      #
-      H <- matrice_Hreg(donnees,cova,alpha,poids)
+      H <- matrice_Hreg(donnees,cova,alpha,poids,reg=regression)
       #    somme sur les i de H[i,k,j]
       w <- rowSums(sapply(1:(dim(H)[1]), function(i) as.numeric(t(H[i,,]))))
       
       # ------------------------------------------------- #
       #                    Etape (M)                      #
       
-      for(k in 1:g){
-        alpha[k,] <- glm(X~.,data=S,weights=as.numeric(H[,,k]),family=poisson())$coefficients
+      
+      if(regression){
+        for(k in 1:g){
+          alpha[k,] <- glm(X~.,data=S,weights=as.numeric(H[,,k]),family=poisson())$coefficients
+        }
+      }else{
+        alpha[,1] <- log(estimation_max_lambda(n,g,TT,donnees,H,w))
       }
       
 #       alphaVec <- c(alpha)
@@ -210,12 +230,17 @@ EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
       tmp <- optim(betaVec, fn=log_vraisemblance_poids_2, gr=grad_log_vraisemblance_poids_2, w=w,TT=TT,g=g, control=list(fnscale=-1),method="L-BFGS-B" ) 
       beta <- rbind(c(0,0),matrix(tmp$par, ncol=2))
       betaVec <- as.numeric(beta[-1,]) 
-      
+
       # ------------------------------------------------- #
       #            Calcul de la log vraisemblance         #
-      
+
       poids <- ensemble_poids_2(betaVec,TT,g)
-      Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(j) log(sum(sapply(1:g,function(k) poids[j,k]*dpois(donnees[i,j],exp(sum(alpha[k,]*c(1,cova[i,j,])))/TT))))))))
+      if(regression){
+        Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(j) log(sum(sapply(1:g,function(k) poids[j,k]*dpois(donnees[i,j],exp(sum(alpha[k,]*c(1,cova[i,j,])))/TT))))))))
+      }else{
+        Log_vraisemblance <- sum(sapply(1:n,function(i) sum(sapply(1:TT,function(j) log(sum(sapply(1:g,function(k) poids[j,k]*dpois(donnees[i,j],exp(sum(alpha[k,]))/TT))))))))
+      }
+
       
       # ---------------------------------------------------------------------- #
       #          Verification de la croissante de la log vraisemblance         #
@@ -226,11 +251,11 @@ EMreg <- function(donnees,cova,g,nb_iteration_max=1000,eps=2*10^-8){
         print("l'algorithme EM n'a pas fait croitre la vraisemblance a l'etape : ")
         print(m)
       }
-      
+
       # ---------------------------------------------------------------------- #
     }
     # *************************************************************** #
-    H <- matrice_Hreg(donnees,cova,alpha,poids)
+    H <- matrice_Hreg(donnees,cova,alpha,poids,reg=regression)
     return(list(poids=poids,beta=beta,alpha=alpha,H=H,croissance_algo=croissance,nb_iteration=m,log_vraisemblance=Log_vraisemblance))
   }
 }
