@@ -143,6 +143,11 @@ MAPreg <- function(donnees,cova=array(0),g,alpha,beta){
   return(z)
 }
 
+MAP_seg_Vec_reg <- function(betaVec,TT,g){
+  poids <- ensemble_poids_2(betaVec,TT,g)
+  z <- sapply(1:TT,function(k) which.max(poids[k,]))
+  return(z)
+}
 
 # ************************************************************************** #
 # ************************************************************************** #
